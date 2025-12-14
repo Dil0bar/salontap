@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Админ — Салоны</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .modal-overlay {
+      display:none;
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,0.6);
+      z-index:9999;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+    }
+    .modal-card {
+      background:#fff;
+      border-radius:8px;
+      padding:16px;
+      width:100%;
+      max-width:720px;
+      max-height:90vh;
+      overflow:auto;
+    }
+    .booking-card { border:1px solid #eee; padding:8px; margin:8px 0; border-radius:6px; }
+    .modal-close-btn { float:right; cursor:pointer; border:none; background:#f0f0f0; padding:6px 8px; border-radius:6px; }
+
+    .svc-categories {
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      margin-bottom:14px;
+    }
+    .svc-categories span {
+      padding:6px 12px;
+      border-radius:10px;
+      background:#f1f1f1;
+      cursor:pointer;
+      transition:.2s;
+    }
+    .svc-categories span.active {
+      background:#ffebe8;
+      border:1px solid #ff7979;
+      color:#b80000;
+    }
+
+    .slots-grid {
+      display:flex;
+      flex-wrap:wrap;
+      gap:20px;
+      margin-bottom:20px;
+    }
+    .slots-col {
+      flex:1 1 260px;
+      min-width:260px;
+      border:1px solid #eee;
+      border-radius:10px;
+      padding:12px;
+    }
+    .slots-col h3 { margin-top:0; }
+    .slots-col input {
+      width:100%;
+      margin-bottom:6px;
+    }
+    .slots-col ul {
+      list-style:none;
+      padding-left:0;
+      margin:8px 0 0;
+    }
+    .slots-col li {
+      padding:4px 0;
+      border-bottom:1px dotted #ddd;
+      font-size:14px;
+    }
+  </style>
+</head>
+<body>
+<header class="site-header"><h1>Админ-панель</h1></header>
+
+<main class="container admin">
+  <!-- ================== AUTH ================== -->
+  <section id="auth-section" class="card auth-card">
+    <!-- LOGIN -->
+    <div id="login-form">
+      <h2>Войти</h2>
+
+      <label>Email:
+        <input id="login-email" type="email">
+      </label>
+
+      <label>Пароль:
+        <input id="login-password" type="password">
+      </label>
+
+      <button id="login-btn" class="btn primary">Войти</button>
+
+      <p>Нет аккаунта?
+        <a href="#" id="go-register">Создать аккаунт</a>
+      </p>
+    </div>
+
+    <!-- REGISTER -->
+    <div id="register-form" style="display:none;">
+      <h2>Регистрация</h2>
+
+      <label>Email:
+        <input id="reg-email" type="email">
+      </label>
+
+      <label>Пароль:
+        <input id="reg-password" type="password">
+      </label>
+
+      <button id="reg-btn" class="btn primary">Создать аккаунт</button>
+
+      <p>Уже есть аккаунт?
+        <a href="#" id="go-login">Войти</a>
+      </p>
+    </div>
+  </section>
+
+  <div id="auth-status"></div>
+
+  <!-- ================== CREATE SALON ================== -->
+  <section class="card create-card" style="display:none;">
+    <h2>Создать салон (только для авторизованных)</h2>
+
+    <label>Название
+      <input id="salon-name">
+    </label>
+
+    <label>Описание
+      <textarea id="salon-desc"></textarea>
+    </label>
+
+    <div class="categories-title">Выберите категории услуг вашего салона</div>
+
+    <div class="svc-categories">
+ 
+      <div id="categories-wrap" class="categories-grid"></div>
+
+
+
+      <div class="categories-title">Здесь вы можете создать свои категирии если не нашли его в списке</div>
+      <input id="catKey" placeholder="Общее название категории на английском massage_spa">
+      <input id="catTitle" placeholder="Общее название категории Массаж">
+      <input id="catItems" placeholder="Что в него входит пиши через запятую? Н-р тайский массаж,">
+      <button onclick="addCategory()">Добавить</button>
+
+      <button type="button" onclick="addCategory()">➕ Добавить</button>
+    </div>
+
+    <label>Добавить фото (локально)
+      <input id="salon-photo" type="file" accept="image/*">
+    </label>
+
+    <label>Адрес салона
+      <input id="salon-address" placeholder="Например: Ташкент, Чиланзар, улица ..." autocomplete="off">
+    </label>
+
+    <div id="map-admin"
+         style="width:100%;height:300px;border-radius:12px;margin-top:10px;box-shadow:0 8px 16px rgba(0,0,0,0.08);">
+    </div>
+
+    <button id="create-salon" class="btn primary">Создать салон</button>
+    <small>Один аккаунт — один салон.</small>
+  </section>
+
+  <!-- ================== MY SALONS LIST ================== -->
+  <section id="admin-panel" class="card" style="display:none;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2>Управление салонами</h2>
+      <button id="logout-btn" class="btn danger" style="display:none;">Выйти</button>
+    </div>
+
+    <div id="admin-salons"></div>
+  </section>
+
+  <hr>
+
+  <!-- ================== SALON MANAGEMENT (services + masters + slots) ================== -->
+  <section id="slots-section" class="card" style="display:none;">
+    <h2>⏱ Управление салоном: <span id="currentSalonTitle"></span></h2>
+
+    <div class="slots-grid">
+      <div class="slots-col">
+        <h3>Услуги</h3>
+        <input id="serviceName" placeholder="Название услуги">
+        <input id="servicePrice" type="number" placeholder="Цена, сум">
+        <input id="serviceDuration-${s.id}" type="number" placeholder="Длительность, мин">
+        <span class="duration badge">60 мин</span>
+
+        <button id="addServiceBtn" type="button" class="btn">Добавить услугу</button>
+        <ul id="servicesList"> </ul>
+      </div>
+
+      <div class="slots-col">
+        <h3>Мастера</h3>
+        <input id="masterName" placeholder="Имя мастера">
+        <button id="addMasterBtn" type="button" class="btn">Добавить мастера</button>
+        <ul id="mastersList"></ul>
+      </div>
+    </div>
+
+    <h3>Слоты записи</h3>
+
+    <label>Услуга
+      <select id="serviceSelect"></select>
+    </label>
+
+    <label>Мастер
+      <select id="masterSelect"></select>
+    </label>
+
+    <div style="margin:10px 0">
+      <input type="date" id="slotDate">
+      <input type="time" id="slotTime">
+      <button id="addSlotBtn" type="button">➕ Добавить слот</button>
+    </div>
+
+    <table border="1" width="100%" id="slotsTable">
+      <thead>
+        <tr>
+          <th>Дата</th>
+          <th>Время</th>
+          <th>Услуга</th>
+          <th>Мастер</th>
+          <th>Статус</th>
+          <th></th>
+        </tr>
+      </thead>
+
+      <tbody></tbody>
+    </table>
+  </section>
+</main>
+
+<!-- Bookings modal (пока просто оставляем) -->
+<div id="bookings-modal" class="modal-overlay" role="dialog" aria-hidden="true">
+  <div class="modal-card">
+    <button id="close-bookings" class="modal-close-btn">Закрыть</button>
+    <h3>Записи</h3>
+    <div id="bookings-list"></div>
+  </div>
+</div>
+
+<script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=6cd194e0-41c7-41ad-956e-9ec538cd1c2d"></script>
+
+
+<script src="js/admin.js"></script>
+</body>
+</html>

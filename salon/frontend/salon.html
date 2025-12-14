@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Салон</title>
+  <link rel="stylesheet" href="css/styles.css">
+
+  <script src="https://api-maps.yandex.ru/2.1/?apikey=6cd194e0-41c7-41ad-956e-9ec538cd1c2d&lang=ru_RU"></script>
+
+</head>
+<body>
+  <header class="site-header">
+    <a href="index.html" class="logo">← Все салоны</a>
+    <h1 id="salon-title"></h1>
+  </header>
+
+  <main class="container salon-page">
+    <section class="salon-meta">
+      <div id="gallery" class="gallery"></div>
+      <div class="salon-info">
+        <p id="salon-desc"></p>
+        <p id="salon-address" style="font-size:16px; margin-top:-10px; opacity:0.7;"></p>
+        <a target="_blank"
+          href="https://yandex.ru/maps/?rtext=~${s.lat},${s.lng}">
+          🧭 Построить маршрут
+        </a>
+
+
+
+        <div id="masters" class="masters"></div>
+        
+      </div>
+    </section>
+
+    <section class="salon-services">
+      <h2>Услуги</h2>
+      <div id="services-list-user">Загрузка услуг...</div>
+    </section>
+
+    <button id="book-btn" class="btn primary">Записаться онлайн</button>
+
+    <!-- Booking Modal -->
+    <div id="booking-modal" class="modal hidden">
+      <div class="modal-content">
+        <button class="modal-close" id="booking-close">×</button>
+        <h2>Онлайн-запись</h2>
+        <label>Мастер
+          <select id="master-select"></select>
+        </label>
+        <div id="calendar-wrap">
+          <div id="calendar" class="calendar"></div>
+        </div>
+        <div id="times-wrap">
+          <h3>Доступное время</h3>
+          <div id="time-slots" class="time-slots"></div>
+        </div>
+        <label>Ваше имя <input id="client-name" type="text"></label>
+        <label>Телефон <input id="client-phone" type="text"></label>
+        <button id="confirm-book" class="btn primary">Подтвердить запись</button>
+      </div>
+    </div>
+  
+
+  </main>
+
+  
+
+  <script src="js/salon.js"></script>
+
+  <div id="salon-map" style="
+    width:100%;
+    height:300px;
+    border-radius:12px;
+    margin-top:20px;"></div>
+
+</body>
+</html>

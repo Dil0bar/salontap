@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Super Admin Panel</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<div class="admin-page container">
+
+  <h1 class="page-title">Super Admin Panel</h1>
+
+  <!-- USERS -->
+  <section class="admin-section">
+    <h2>👤 Пользователи</h2>
+    <div class="table-wrap">
+      <table class="gg-table" id="users"></table>
+    </div>
+  </section>
+
+  <!-- SALONS -->
+  <section class="admin-section">
+    <h2>🏢 Салоны</h2>
+    <div class="table-wrap">
+      <table class="gg-table" id="salons"></table>
+    </div>
+  </section>
+
+  <!-- BOOKINGS -->
+  <section class="admin-section">
+    <h2>📅 Записи</h2>
+    <div class="table-wrap">
+      <table class="gg-table" id="bookings"></table>
+    </div>
+  </section>
+
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/superadmin.js"></script>
+</body>
+</html>
