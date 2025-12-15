@@ -18,6 +18,46 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 
+const categoriesBar = document.getElementById("categoriesBar");
+
+async function loadCategories(){
+  const res = await fetch("/api/categories");
+  const categories = await res.json();
+
+  categoriesBar.innerHTML =
+    `<button class="active" data-cat="">Все</button>` +
+    categories.map(c => `
+      <button data-cat="${c.key}">${c.title}</button>
+    `).join("");
+
+  categoriesBar.addEventListener("click", e => {
+    if (e.target.tagName !== "BUTTON") return;
+
+    document
+      .querySelectorAll(".category-buttons button")
+      .forEach(b => b.classList.remove("active"));
+
+    e.target.classList.add("active");
+    activeCategory = e.target.dataset.cat;
+
+    filterSalons();
+  });
+}
+
+loadCategories();
+
+
+function filterSalons(){
+  document.querySelectorAll(".salon-card").forEach(card => {
+    const cats = JSON.parse(card.dataset.categories || "[]");
+
+    if (!activeCategory || cats.includes(activeCategory)) {
+      card.style.display = "";
+    } else {
+      card.style.display = "none";
+    }
+  });
+}
 
 
 function addMinutes(dt, mins) {
@@ -162,23 +202,26 @@ function applyFilters() {
   }
 
   wrap.innerHTML = items.map(s => `
-    <article class="salon-card">
-      <img src="${s.photos?.[0] || "assets/sample.jpg"}" alt="${s.name}">
+  <article class="salon-card"
+    data-categories='${JSON.stringify(s.categories || [])}'>
+
+    <img src="${s.photos?.[0] || "assets/sample.jpg"}" alt="${s.name}">
       
-      <h3>${s.name}</h3>
+    <h3>${s.name}</h3>
 
-      ${s.distance !== undefined
-        ? `<div class="distance">📍 ${s.distance.toFixed(1)} км от вас</div>`
-        : ""
-      }
+    ${s.distance !== undefined
+      ? `<div class="distance">📍 ${s.distance.toFixed(1)} км от вас</div>`
+      : ""
+    }
 
-      <p>${s.short_desc || ""}</p>
+    <p>${s.short_desc || ""}</p>
 
-      <div class="card-actions">
-        <a class="btn" href="salon.html?id=${s.id}">Открыть</a>
-      </div>
-    </article>
-  `).join("");
+    <div class="card-actions">
+      <a class="btn" href="salon.html?id=${s.id}">Открыть</a>
+    </div>
+  </article>
+`).join("");
+
 
   placeMarkers(items);
 }

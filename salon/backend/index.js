@@ -153,7 +153,10 @@ app.get(
 
 // signup
 app.post("/api/signup", async (req, res) => {
-  const { email, password } = req.body;
+
+  const { email, password, role } = req.body;
+  const userRole = role === "salon_admin" ? "salon_admin" : "client";
+
 
   if (!email || !password) {
     return res.status(400).json({ error: "email and password required" });
@@ -698,40 +701,87 @@ app.get("/api/services/:serviceId/masters", async (req, res) => {
 
 
 
-
-
 // создать услугу
-app.post("/api/services", authMiddleware, async (req, res) => {
-  const { salon_id, name, price, category, duration_minutes } = req.body;
+// ========== CREATE SERVICE (WITH MASTERS REQUIRED) ==========
+app.post(
+  "/api/services",
+  authMiddleware,
+  allowRoles("salon_admin"),
+  async (req, res) => {
+    try {
+      const {
+        salon_id,
+        name,
+        price,
+        duration_minutes,
+        category,
+        masters
+      } = req.body;
 
-  if (!salon_id || !name)
-    return res.status(400).json({ error: "salon_id and name required" });
+      // 🔴 ВАЛИДАЦИЯ
+      if (!salon_id || !name) {
+        return res.status(400).json({ error: "salon_id and name required" });
+      }
 
-  const salon = await getAsync(
-    "SELECT * FROM salons WHERE id = ?",
-    [salon_id]
-  );
+      if (!Array.isArray(masters) || masters.length === 0) {
+        return res.status(400).json({
+          error: "Нужно выбрать хотя бы одного мастера для услуги"
+        });
+      }
 
-  if (!salon || salon.owner_id !== req.user.id)
-    return res.status(403).json({ error: "Forbidden" });
+      // 🔐 проверяем, что салон принадлежит администратору
+      const salon = await getAsync(
+        "SELECT * FROM salons WHERE id = ?",
+        [salon_id]
+      );
 
-  const r = await runAsync(
-    `INSERT INTO services 
-     (salon_id, name, price, category, duration_minutes)
-     VALUES (?, ?, ?, ?, ?)`,
-    [
-      salon_id,
-      name,
-      price || null,
-      category,
-      duration_minutes || null
-    ]
-  );
+      if (!salon) {
+        return res.status(404).json({ error: "Salon not found" });
+      }
 
-  res.json({ ok: true, id: r.lastID });
-});
+      if (salon.owner_id !== req.user.id && req.user.role !== "super_admin") {
+        return res.status(403).json({ error: "Forbidden" });
+      }
 
+      // ✅ создаём услугу
+      const r = await runAsync(
+        `
+        INSERT INTO services (salon_id, name, price, duration_minutes, category)
+        VALUES (?, ?, ?, ?, ?)
+        `,
+        [
+          salon_id,
+          name,
+          price || null,
+          duration_minutes || null,
+          category || null
+        ]
+      );
 
+      const serviceId = r.lastID;
+
+      // ✅ привязываем мастеров
+      for (const masterId of masters) {
+        await runAsync(
+          `
+          INSERT INTO service_masters (service_id, master_id)
+          VALUES (?, ?)
+          `,
+          [serviceId, masterId]
+        );
+      }
+
+      res.json({
+        ok: true,
+        service_id: serviceId
+      });
+
+    } catch (e) {
+      console.error("Create service error", e);
+      res.status(500).json({ error: "DB error" });
+    }
+  }
+);
 
 // ========== SCHEDULE ==========
 
@@ -750,7 +800,7 @@ app.post(
     }
 
     try {
-      // проверяем, что мастер принадлежит салону этого владельца
+      // 🔹 1. проверяем мастера и салон
       const master = await getAsync(
         `SELECT m.*, s.owner_id, s.id AS salon_id
          FROM masters m
@@ -762,35 +812,42 @@ app.post(
       if (!master) {
         return res.status(404).json({ error: "Master not found" });
       }
+
       if (master.owner_id !== req.user.id && req.user.role !== "super_admin") {
         return res.status(403).json({ error: "Forbidden" });
       }
 
-      // проверяем услугу
+      // 🔹 2. проверяем услугу
       const service = await getAsync(
         "SELECT * FROM services WHERE id = ?",
         [service_id]
       );
+
       if (!service) {
         return res.status(404).json({ error: "Service not found" });
       }
+
       if (service.salon_id !== master.salon_id) {
         return res.status(400).json({
           error: "Service and master belong to different salons"
         });
       }
 
-      // проверяем, что мастер привязан к услуге
+      // ============================
+      //  ВОТ ЗДЕСЬ НУЖНА ЭТА ПРОВЕРКА
+      // ============================
       const allowed = await getAsync(
         "SELECT 1 FROM service_masters WHERE service_id = ? AND master_id = ?",
         [service_id, master_id]
       );
-      // if (!allowed) {
-      //   return res.status(400).json({
-      //     error: "Мастер не привязан к услуге"
-      //   });
-      // }
 
+      if (!allowed) {
+        return res.status(400).json({
+          error: "Мастер не привязан к услуге"
+        });
+      }
+
+      // 🔹 3. создаём слоты
       const duration = service.duration_minutes || 0;
 
       for (const s of slots) {
@@ -799,7 +856,7 @@ app.post(
         const start = timeToMinutes(s.time);
         const end = start + duration;
 
-        // проверка пересечения по времени
+        // проверка пересечений
         const conflicts = await allAsync(
           `
           SELECT sch.time, srv.duration_minutes
@@ -812,7 +869,7 @@ app.post(
           [master_id, s.date]
         );
 
-        const hasOverlap = conflicts.some((c) => {
+        const hasOverlap = conflicts.some(c => {
           const cStart = timeToMinutes(c.time);
           const cEnd = cStart + (c.duration_minutes || 0);
           return duration > 0 && start < cEnd && end > cStart;
@@ -825,27 +882,23 @@ app.post(
         }
 
         await runAsync(
-          `INSERT INTO schedule (master_id, service_id, date, time, is_taken, is_blocked)
-           VALUES (?, ?, ?, ?, 0, 0)`,
+          `
+          INSERT INTO schedule
+          (master_id, service_id, date, time, is_taken, is_blocked)
+          VALUES (?, ?, ?, ?, 0, 0)
+          `,
           [master_id, service_id, s.date, s.time]
         );
       }
 
       res.json({ ok: true });
+
     } catch (e) {
       console.error("Create schedule error", e);
       res.status(500).json({ error: "DB error" });
     }
   }
 );
-
-
-function timeToMinutes(t) {
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
-}
-
-
 
 
 
@@ -882,9 +935,6 @@ app.delete("/api/schedule/:id", authMiddleware, (req, res) => {
 });
 
 
-
-
-// ========== BOOKINGS ==========
 
 // book a slot (public)
 // app.post("/api/book", async (req, res) => {
@@ -942,21 +992,56 @@ app.post("/api/book", async (req, res) => {
   const { schedule_id, client_name, client_phone } = req.body;
 
   if (!schedule_id || !client_phone) {
-    return res.status(400).json({ error: "schedule_id and client_phone required" });
+    return res.status(400).json({
+      error: "schedule_id and client_phone required"
+    });
   }
 
+  // 1️⃣ Получаем слот + услугу + мастера
   const slot = await getAsync(`
-    SELECT s.*, m.name AS master_name, sa.name AS salon_name
+    SELECT 
+      s.id,
+      s.service_id,
+      s.master_id,
+      s.date,
+      s.time,
+      s.is_taken,
+      s.is_blocked,
+      m.name AS master_name,
+      sa.name AS salon_name
     FROM schedule s
     JOIN masters m ON s.master_id = m.id
     JOIN salons sa ON m.salon_id = sa.id
     WHERE s.id = ?
   `, [schedule_id]);
 
-  if (!slot) return res.status(404).json({ error: "Slot not found" });
-  if (slot.is_taken) return res.status(400).json({ error: "Slot already taken" });
+  if (!slot) {
+    return res.status(404).json({ error: "Slot not found" });
+  }
 
-  // 1️⃣ СОХРАНЯЕМ ЗАПИСЬ
+  // 2️⃣ БЛОКИРОВКИ
+  if (slot.is_blocked) {
+    return res.status(400).json({ error: "Slot is blocked" });
+  }
+
+  if (slot.is_taken) {
+    return res.status(400).json({ error: "Slot already taken" });
+  }
+
+  // 3️⃣ 🔥 ПРОВЕРКА service ↔ master
+  const allowed = await getAsync(
+    `SELECT 1 FROM service_masters
+     WHERE service_id = ? AND master_id = ?`,
+    [slot.service_id, slot.master_id]
+  );
+
+  if (!allowed) {
+    return res.status(400).json({
+      error: "Мастер больше не оказывает эту услугу"
+    });
+  }
+
+  // 4️⃣ СОЗДАЁМ BOOKING
   const r = await runAsync(`
     INSERT INTO bookings
     (schedule_id, client_name, client_phone, status)
@@ -967,13 +1052,21 @@ app.post("/api/book", async (req, res) => {
     client_phone
   ]);
 
-  // 2️⃣ БЛОКИРУЕМ СЛОТ
-  await runAsync(
-    "UPDATE schedule SET is_taken = 1 WHERE id = ?",
+  // 5️⃣ БЛОКИРУЕМ СЛОТ (атомарно по id + is_taken)
+  const updated = await runAsync(
+    `UPDATE schedule
+     SET is_taken = 1
+     WHERE id = ? AND is_taken = 0`,
     [schedule_id]
   );
 
-  // 3️⃣ TELEGRAM УВЕДОМЛЕНИЕ (ГРУППА)
+  if (updated.changes === 0) {
+    return res.status(400).json({
+      error: "Slot was taken by another client"
+    });
+  }
+
+  // 6️⃣ TELEGRAM
   await notifyAdmin(
 `🆕 НОВАЯ ЗАПИСЬ
 
@@ -988,6 +1081,7 @@ app.post("/api/book", async (req, res) => {
 
   res.json({ ok: true, booking_id: r.lastID });
 });
+
 
 
 

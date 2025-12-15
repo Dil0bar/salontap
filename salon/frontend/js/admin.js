@@ -306,6 +306,7 @@
       else alert("Ошибка создания салона");
     }
   };
+  
 
   // ====== RENDER MY SALONS ======
   async function renderMySalons() {
@@ -332,15 +333,38 @@
           <div class="salon-manage" id="manage-${s.id}" style="display:none; margin-top:16px;">
 
             <h4>Услуги</h4>
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
-              <input id="serviceName-${s.id}" placeholder="Название услуги">
-              <input id="servicePrice-${s.id}" type="number" placeholder="Цена, сум" style="width:140px">
-              <input id="serviceDuration-${s.id}" type="number" placeholder="Длительность (мин)" style="width:170px">
-              <button type="button" class="btn" data-add-service="${s.id}">Добавить услугу</button>
-            </div>
-            <ul id="servicesList-${s.id}" style="margin-top:10px;"></ul>
 
-            <hr>
+              <div class="service-create" style="display:flex; flex-direction:column; gap:10px; max-width:520px;">
+
+                <input id="serviceName-${s.id}" placeholder="Название услуги">
+
+                <div style="display:flex; gap:8px;">
+                  <input id="servicePrice-${s.id}" type="number" placeholder="Цена, сум">
+                  <input id="serviceDuration-${s.id}" type="number" placeholder="Длительность (мин)">
+                </div>
+
+                <!-- КАТЕГОРИЯ -->
+                <label><b>Категория</b></label>
+                <input
+                  id="serviceCategory-${s.id}"
+                  list="categoryList-${s.id}"
+                  placeholder="Выберите категорию">
+                <datalist id="categoryList-${s.id}"></datalist>
+
+                <!-- МАСТЕРА -->
+                <label><b>Мастера (через запятую)</b></label>
+                <label><b>Мастера</b></label>
+                  <div id="serviceMasters-${s.id}" class="service-masters-checkboxes">
+                    <small style="opacity:.7">Выберите мастеров</small>
+                  </div>
+
+                <button class="btn" data-add-service="${s.id}">
+                  Добавить услугу
+                </button>
+              </div>
+
+              <ul id="servicesList-${s.id}" style="margin-top:10px;"></ul>
+
 
             <h4>Мастера</h4>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -438,6 +462,7 @@ function clearActive() {
 }
 
 
+
   
   // ====== OPEN/CLOSE MANAGE + LOAD DATA ======
   async function toggleSalonManage(salonId, btn) {
@@ -471,6 +496,14 @@ function clearActive() {
     renderServicesInline(salonId, services);
     renderMastersInline(salonId, masters);
 
+    renderServiceMastersCheckboxes(salonId, masters);
+
+
+    const categories = await apiFetch("GET", "/categories");
+    renderServiceCategories(salonId, categories);
+
+    
+
     // default selects
     const ms = document.getElementById(`masterSelect-${salonId}`);
     const ss = document.getElementById(`serviceSelect-${salonId}`);
@@ -489,6 +522,17 @@ function clearActive() {
       };
     }
   }
+
+function renderServiceCategories(salonId, categories) {
+  const list = document.getElementById(`categoryList-${salonId}`);
+  if (!list) return;
+
+  list.innerHTML = categories.map(c =>
+    `<option value="${c.key}">${c.title}</option>`
+  ).join("");
+}
+
+
 
   function renderServicesInline(salonId, services) {
     const ul = document.getElementById(`servicesList-${salonId}`);
@@ -565,6 +609,73 @@ function clearActive() {
     }).join("");
   }
 
+  async function loadServiceInputs(salonId) {
+
+  // ===== КАТЕГОРИИ =====
+  const catList = document.getElementById(`categoryList-${salonId}`);
+  catList.innerHTML = '';
+
+  const categories = await fetch(`/api/categories?salon_id=${salonId}`)
+    .then(r => r.json());
+
+  categories.forEach(c => {
+    catList.insertAdjacentHTML(
+      'beforeend',
+      `<option value="${c.name}" data-id="${c.id}"></option>`
+    );
+  });
+
+  // ===== МАСТЕРА =====
+  const mastersList = document.getElementById(`mastersList-${salonId}`);
+  mastersList.innerHTML = '';
+
+  const masters = await fetch(`/api/masters?salon_id=${salonId}`)
+    .then(r => r.json());
+
+  masters.forEach(m => {
+    mastersList.insertAdjacentHTML(
+      'beforeend',
+      `<option value="${m.name}" data-id="${m.id}"></option>`
+    );
+  });
+}
+
+
+function renderServiceMastersCheckboxes(salonId, masters) {
+  const box = document.getElementById(`serviceMasters-${salonId}`);
+  if (!box) return;
+
+  selectedMasters = [];
+
+  if (!masters.length) {
+    box.innerHTML = "<small>Сначала добавьте мастеров</small>";
+    return;
+  }
+
+  box.innerHTML = masters.map(m => `
+    <label class="master-checkbox">
+      <input type="checkbox" name="service-master" value="${m.id}">
+      ${escapeHtml(m.name)}
+    </label>
+  `).join("");
+
+  box.querySelectorAll("input[type=checkbox]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const id = Number(cb.value);
+      if (cb.checked) {
+        if (!selectedMasters.includes(id)) {
+          selectedMasters.push(id);
+        }
+      } else {
+        selectedMasters = selectedMasters.filter(x => x !== id);
+      }
+    });
+  });
+}
+
+
+
+
   // ====== CLICK HANDLER (event delegation) ======
   document.addEventListener("click", async (e) => {
     try {
@@ -576,42 +687,62 @@ function clearActive() {
         return;
       }
 
+      if (e.target.closest("#close-bookings")) {
+          document.getElementById("bookings-modal").style.display = "none";
+        }
+
+        if (e.target.classList.contains("modal-overlay")) {
+          e.target.style.display = "none";
+        }
+
       // add service
       const addServiceBtn = e.target.closest("[data-add-service]");
-      if (addServiceBtn) {
-        const salonId = addServiceBtn.dataset.addService;
+        if (addServiceBtn) {
+          const salonId = Number(addServiceBtn.dataset.addService);
 
-        const nameInput = document.getElementById(`serviceName-${salonId}`);
-        const priceInput = document.getElementById(`servicePrice-${salonId}`);
-        const durInput = document.getElementById(`serviceDuration-${salonId}`);
+          const name =
+            document.getElementById(`serviceName-${salonId}`).value.trim();
 
-        const name = nameInput?.value.trim();
-        if (!name) return alert("Введите название услуги");
+          const price =
+            document.getElementById(`servicePrice-${salonId}`).value || null;
 
-         if (!window.selectedCategoryKey) {
-            return alert("Выберите категорию услуги");
-          }
+          const duration_minutes =
+            document.getElementById(`serviceDuration-${salonId}`).value || null;
 
+          if (!name) return alert("Введите название услуги");
+
+            const categoryInput = document.getElementById(`serviceCategory-${salonId}`);
+            const category = categoryInput ? categoryInput.value.trim() : "";
+
+
+          if (!category) return alert("Выберите категорию");
+
+          const checkedMasters = Array.from(
+            document.querySelectorAll(
+              `#manage-${salonId} input[name="service-master"]:checked`
+            )
+          ).map(cb => Number(cb.value));
+
+          if (!checkedMasters.length) {
+            return alert("Выберите хотя бы одного мастера");
+}
+
+
+          // 🚀 один запрос
           await apiFetch("POST", "/services", {
-            salon_id,
+            salon_id: salonId,
             name,
             price,
             duration_minutes,
-            category: window.selectedCategoryKey,
-            category_item: window.selectedCategoryItem || null
+            category,
+            masters: checkedMasters  
           });
 
+          await refreshSalonUI(salonId);
+          showStatus("✅ Услуга создана");
+          return;
+}
 
-       
-
-        if (nameInput) nameInput.value = "";
-        if (priceInput) priceInput.value = "";
-        if (durInput) durInput.value = "";
-
-        await refreshSalonUI(Number(salonId));
-        showStatus("✅ Услуга добавлена");
-        return;
-      }
 
       // delete service
       const delServiceBtn = e.target.closest("[data-del-service]");
@@ -767,7 +898,7 @@ function clearActive() {
   // ====== START ======
   document.addEventListener("DOMContentLoaded", () => {
     updateAuthUI();
-    loadCategories(); // 👈 ВОТ ЭТОГО НЕ ХВАТАЛО
+    loadCategories(); 
 
   });
 
