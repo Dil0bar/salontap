@@ -11,7 +11,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   let activeCategory = "";
 
   const salonIcon = L.icon({
-  iconUrl: "assets/salon-marker.png", // 🔴 иконка
+  iconUrl: "assets/salon-marker.png",
   iconSize: [34, 42],
   iconAnchor: [17, 42],
   popupAnchor: [0, -36]
