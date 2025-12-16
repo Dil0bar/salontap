@@ -279,13 +279,17 @@
       address: addressEl?.value.trim() || "",
       short_desc: descEl?.value.trim() || "",
       full_desc: descEl?.value.trim() || "",
-      categories: [...new Set(selectedCategories)],
+      categories: [...new Set(window.selectedCategoryKeys || [])],
       lat: lastCoords[0],
       lng: lastCoords[1],
       photos: pendingPhoto ? [pendingPhoto] : []
     };
 
     try {
+      if (!window.selectedCategoryKeys || !window.selectedCategoryKeys.length) {
+          return alert("Выберите хотя бы одну категорию");
+        }
+
       await apiFetch("POST", "/salons", payload);
 
       // reset form
@@ -320,7 +324,7 @@
         return;
       }
 
-      adminSalonsWrap.innerHTML = salons.map((s) => `
+      adminSalonsWrap.innerHTML = salons.map((s ) => `
         <div class="salon-block" data-salon-id="${s.id}">
           <h3>${escapeHtml(s.name)}</h3>
           <p>${escapeHtml(s.short_desc || "")}</p>

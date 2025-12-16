@@ -97,8 +97,10 @@ CREATE TABLE IF NOT EXISTS audit_log (
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+UPDATE salons
+SET categories = '["nails","hair","brows_lashes","barbershop","men_services"]'
+WHERE name LIKE '%Bosco%';
 
-
-
-
-
+UPDATE salons
+SET categories = '["nails"]'
+WHERE name LIKE '%Bloom%';

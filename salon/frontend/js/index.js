@@ -23,25 +23,38 @@ const categoriesBar = document.getElementById("categoriesBar");
 async function loadCategories(){
   const res = await fetch("/api/categories");
   const categories = await res.json();
+  console.log("📦 categories from api:", categories);
 
   categoriesBar.innerHTML =
     `<button class="active" data-cat="">Все</button>` +
     categories.map(c => `
       <button data-cat="${c.key}">${c.title}</button>
     `).join("");
+categoriesBar.addEventListener("click", e => {
+  if (e.target.tagName !== "BUTTON") return;
 
-  categoriesBar.addEventListener("click", e => {
-    if (e.target.tagName !== "BUTTON") return;
+  document
+    .querySelectorAll(".category-buttons button")
+    .forEach(b => b.classList.remove("active"));
 
-    document
-      .querySelectorAll(".category-buttons button")
-      .forEach(b => b.classList.remove("active"));
+  e.target.classList.add("active");
 
-    e.target.classList.add("active");
-    activeCategory = e.target.dataset.cat;
+  activeCategory = e.target.dataset.cat || "";
 
-    filterSalons();
-  });
+  console.log("🎯 activeCategory =", activeCategory);
+
+  const items = activeCategory
+    ? salons.filter(s =>
+        Array.isArray(s.categories) &&
+        s.categories.includes(activeCategory)
+      )
+    : salons;
+
+  console.log("📋 filtered salons:", items);
+
+  render(items);
+});
+
 }
 
 loadCategories();
@@ -307,30 +320,30 @@ function applyFilters() {
   });
 
   // ===== CATEGORY FILTER =====
-  function filterByCategory(cat) {
-    return salons.filter(s =>
-      (s.categories || []).some(c =>
-        c.toLowerCase().includes(cat)
-      )
-    );
-  }
+ function filterByCategory(catKey) {
+  return salons.filter(s =>
+    Array.isArray(s.categories) &&
+    s.categories.includes(catKey)
+  );
+}
 
-  document.querySelectorAll(".category-buttons button")
-    .forEach(btn => {
-      btn.addEventListener("click", () => {
-        document.querySelectorAll(".category-buttons button")
-          .forEach(b => b.classList.remove("active"));
 
-        btn.classList.add("active");
-        activeCategory = btn.dataset.cat?.toLowerCase() || "";
+  // document.querySelectorAll(".category-buttons button")
+  //   .forEach(btn => {
+  //     btn.addEventListener("click", () => {
+  //       // document.querySelectorAll(".category-buttons button")
+  //       //   .forEach(b => b.classList.remove("active"));
 
-        const items = activeCategory
-          ? filterByCategory(activeCategory)
-          : salons;
+  //       // btn.classList.add("active");
+  //       activeCategory = btn.dataset.cat?.toLowerCase() || "";
 
-        render(items);
-      });
-    });
+  //       const items = activeCategory
+  //         ? filterByCategory(activeCategory)
+  //         : salons;
+
+  //       render(items);
+  //     });
+  //   });
 
     let userLocation = null;
 
